@@ -28,6 +28,7 @@ interface RunServerOptions {
   showToken: boolean
   bypassCredit: boolean
   silentMode: boolean
+  serverOnly: boolean
 }
 
 export async function runServer(options: RunServerOptions): Promise<void> {
@@ -81,6 +82,16 @@ export async function runServer(options: RunServerOptions): Promise<void> {
 
   if (options.claudeCode) {
     invariant(state.models, "Models should be loaded by now")
+
+    // Si serverOnly, ne lancer que le serveur sans Claude Code
+    if (options.serverOnly) {
+      serve({
+        fetch: server.fetch as ServerHandler,
+        port: availablePort,
+        silent: true,
+      })
+      return
+    }
 
     // Démarrer le serveur en arrière-plan
     serve({
@@ -179,6 +190,11 @@ export const start = defineCommand({
       description:
         "Generate a command to launch Claude Code with Copilot API config",
     },
+    "server-only": {
+      type: "boolean",
+      default: false,
+      description: "Start server only without launching Claude Code (used with --claude-code)",
+    },
     "show-token": {
       type: "boolean",
       default: false,
@@ -208,6 +224,7 @@ export const start = defineCommand({
       showToken: args["show-token"],
       bypassCredit: args["bypass-credit"] || args["claude-code"], // Auto-activer bypass-credit avec claude-code
       silentMode: args["claude-code"], // Mode silencieux automatique avec claude-code
+      serverOnly: args["server-only"],
     })
   },
 })
