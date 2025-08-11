@@ -13,6 +13,7 @@ import { generateEnvScript } from "./lib/shell"
 import { state } from "./lib/state"
 import { setupCopilotToken, setupGitHubToken } from "./lib/token"
 import { cacheModels, cacheVSCodeVersion } from "./lib/utils"
+import { findAvailablePort } from "./lib/port-finder"
 import { server } from "./server"
 
 interface RunServerOptions {
@@ -71,7 +72,12 @@ export async function runServer(options: RunServerOptions): Promise<void> {
     server.use(logger())
   }
 
-  const serverUrl = `http://localhost:${options.port}`
+  // Trouver un port libre
+  const availablePort = await findAvailablePort(options.port)
+  if (availablePort !== options.port && !options.claudeCode) {
+    consola.info(`Port ${options.port} occupé, utilisation du port ${availablePort}`)
+  }
+  const serverUrl = `http://localhost:${availablePort}`
 
   if (options.claudeCode) {
     invariant(state.models, "Models should be loaded by now")
@@ -79,7 +85,7 @@ export async function runServer(options: RunServerOptions): Promise<void> {
     // Démarrer le serveur en arrière-plan
     serve({
       fetch: server.fetch as ServerHandler,
-      port: options.port,
+      port: availablePort,
       silent: true, // Désactiver le log "Listening on" en mode claude-code
     })
 
@@ -115,7 +121,7 @@ export async function runServer(options: RunServerOptions): Promise<void> {
 
   serve({
     fetch: server.fetch as ServerHandler,
-    port: options.port,
+    port: availablePort,
   })
 }
 
