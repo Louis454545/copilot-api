@@ -11,6 +11,8 @@ export interface State {
   manualApprove: boolean
   rateLimitWait: boolean
   showToken: boolean
+  bypassCredit: boolean
+  silentMode: boolean
 
   // Rate limiting configuration
   rateLimitSeconds?: number
@@ -22,4 +24,6 @@ export const state: State = {
   manualApprove: false,
   rateLimitWait: false,
   showToken: false,
+  bypassCredit: false,
+  silentMode: false,
 }

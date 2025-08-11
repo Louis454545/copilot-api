@@ -5,6 +5,8 @@ import clipboard from "clipboardy"
 import consola from "consola"
 import { serve, type ServerHandler } from "srvx"
 import invariant from "tiny-invariant"
+import { spawn } from "node:child_process"
+import { logger } from "hono/logger"
 
 import { ensurePaths } from "./lib/paths"
 import { generateEnvScript } from "./lib/shell"
@@ -23,12 +25,16 @@ interface RunServerOptions {
   githubToken?: string
   claudeCode: boolean
   showToken: boolean
+  bypassCredit: boolean
+  silentMode: boolean
 }
 
 export async function runServer(options: RunServerOptions): Promise<void> {
   if (options.verbose) {
     consola.level = 5
     consola.info("Verbose logging enabled")
+  } else if (options.claudeCode) {
+    consola.level = 0 // Supprimer tous les logs seulement en mode claude-code
   }
 
   state.accountType = options.accountType
@@ -40,6 +46,8 @@ export async function runServer(options: RunServerOptions): Promise<void> {
   state.rateLimitSeconds = options.rateLimit
   state.rateLimitWait = options.rateLimitWait
   state.showToken = options.showToken
+  state.bypassCredit = options.bypassCredit
+  state.silentMode = options.silentMode
 
   await ensurePaths()
   await cacheVSCodeVersion()
@@ -58,46 +66,46 @@ export async function runServer(options: RunServerOptions): Promise<void> {
     `Available models: \n${state.models?.data.map((model) => `- ${model.id}`).join("\n")}`,
   )
 
+  // Ajouter le logger seulement si pas en mode claude-code
+  if (!options.claudeCode) {
+    server.use(logger())
+  }
+
   const serverUrl = `http://localhost:${options.port}`
 
   if (options.claudeCode) {
     invariant(state.models, "Models should be loaded by now")
 
-    const selectedModel = await consola.prompt(
-      "Select a model to use with Claude Code",
-      {
-        type: "select",
-        options: state.models.data.map((model) => model.id),
-      },
-    )
+    // Démarrer le serveur en arrière-plan
+    serve({
+      fetch: server.fetch as ServerHandler,
+      port: options.port,
+    })
 
-    const selectedSmallModel = await consola.prompt(
-      "Select a small model to use with Claude Code",
-      {
-        type: "select",
-        options: state.models.data.map((model) => model.id),
-      },
-    )
+    // Créer la commande PowerShell avec les modèles prédéfinis
+    const powershellCommand = `$env:ANTHROPIC_BASE_URL="${serverUrl}"; $env:ANTHROPIC_AUTH_TOKEN="dummy"; $env:ANTHROPIC_MODEL="claude-sonnet-4"; $env:ANTHROPIC_SMALL_FAST_MODEL="gpt-4.1-2025-04-14"; claude`
 
-    const command = generateEnvScript(
-      {
-        ANTHROPIC_BASE_URL: serverUrl,
-        ANTHROPIC_AUTH_TOKEN: "dummy",
-        ANTHROPIC_MODEL: selectedModel,
-        ANTHROPIC_SMALL_FAST_MODEL: selectedSmallModel,
-      },
-      "claude",
-    )
+    // Lancer Claude Code via PowerShell
+    const claudeProcess = spawn('powershell', ['-Command', powershellCommand], {
+      stdio: 'inherit'
+    })
 
-    try {
-      clipboard.writeSync(command)
-      consola.success("Copied Claude Code command to clipboard!")
-    } catch {
-      consola.warn(
-        "Failed to copy to clipboard. Here is the Claude Code command:",
-      )
-      consola.log(command)
-    }
+    // Gérer la sortie de Claude Code
+    claudeProcess.on('exit', (code) => {
+      consola.info(`Claude Code exited with code ${code}`)
+      process.exit(code || 0)
+    })
+
+    // Gérer les signaux pour fermer proprement
+    process.on('SIGINT', () => {
+      claudeProcess.kill('SIGINT')
+    })
+
+    process.on('SIGTERM', () => {
+      claudeProcess.kill('SIGTERM')
+    })
+
+    return // Ne pas continuer avec le serveur normal
   }
 
   consola.box(
@@ -169,6 +177,11 @@ export const start = defineCommand({
       default: false,
       description: "Show GitHub and Copilot tokens on fetch and refresh",
     },
+    "bypass-credit": {
+      type: "boolean",
+      default: false,
+      description: "Automatically inject hey/hello messages for credit bypass",
+    },
   },
   run({ args }) {
     const rateLimitRaw = args["rate-limit"]
@@ -186,6 +199,8 @@ export const start = defineCommand({
       githubToken: args["github-token"],
       claudeCode: args["claude-code"],
       showToken: args["show-token"],
+      bypassCredit: args["bypass-credit"] || args["claude-code"], // Auto-activer bypass-credit avec claude-code
+      silentMode: args["claude-code"], // Mode silencieux automatique avec claude-code
     })
   },
 })
