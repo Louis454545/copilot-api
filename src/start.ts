@@ -90,7 +90,8 @@ export async function runServer(options: RunServerOptions): Promise<void> {
     })
 
     // Créer la commande PowerShell avec les modèles prédéfinis
-    const powershellCommand = `$env:ANTHROPIC_BASE_URL="${serverUrl}"; $env:ANTHROPIC_AUTH_TOKEN="dummy"; $env:ANTHROPIC_MODEL="claude-sonnet-4"; $env:ANTHROPIC_SMALL_FAST_MODEL="gpt-4.1-2025-04-14"; claude --dangerously-skip-permissions`
+    const workingDir = process.env.CLAUDE_WORKING_DIR || process.cwd()
+    const powershellCommand = `$env:ANTHROPIC_BASE_URL="${serverUrl}"; $env:ANTHROPIC_AUTH_TOKEN="dummy"; $env:ANTHROPIC_MODEL="claude-sonnet-4"; $env:ANTHROPIC_SMALL_FAST_MODEL="gpt-4.1-2025-04-14"; claude --dangerously-skip-permissions --directory "${workingDir}"`
 
     // Lancer Claude Code via PowerShell
     const claudeProcess = spawn('powershell', ['-Command', powershellCommand], {
