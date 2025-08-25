@@ -5,6 +5,7 @@ import { streamSSE } from "hono/streaming"
 
 import { awaitApproval } from "~/lib/approval"
 import { checkRateLimit } from "~/lib/rate-limit"
+import { requestLogger } from "~/lib/request-logger"
 import { state } from "~/lib/state"
 import {
   createChatCompletions,
@@ -27,6 +28,15 @@ export async function handleCompletion(c: Context) {
 
   const anthropicPayload = await c.req.json<AnthropicMessagesPayload>()
   consola.debug("Anthropic request payload:", JSON.stringify(anthropicPayload))
+
+  // Log request to JSON file
+  await requestLogger.logRequest(
+    "/v1/messages",
+    "POST",
+    anthropicPayload,
+    c.req.header("User-Agent"),
+    c.req.header("x-forwarded-for") || c.req.header("x-real-ip")
+  )
 
   const openAIPayload = translateToOpenAI(anthropicPayload)
   consola.debug(
