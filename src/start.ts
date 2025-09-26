@@ -23,6 +23,7 @@ interface RunServerOptions {
   githubToken?: string
   claudeCode: boolean
   showToken: boolean
+  bypassCredit: boolean
 }
 
 export async function runServer(options: RunServerOptions): Promise<void> {
@@ -40,6 +41,7 @@ export async function runServer(options: RunServerOptions): Promise<void> {
   state.rateLimitSeconds = options.rateLimit
   state.rateLimitWait = options.rateLimitWait
   state.showToken = options.showToken
+  state.bypassCredit = options.bypassCredit
 
   await ensurePaths()
   await cacheVSCodeVersion()
@@ -104,6 +106,28 @@ export async function runServer(options: RunServerOptions): Promise<void> {
     `🌐 Usage Viewer: https://ericc-ch.github.io/copilot-api?endpoint=${serverUrl}/usage`,
   )
 
+  // Check if port is already in use
+  try {
+    // Try to create a temporary server to test the port
+    const testServer = await import("node:net").then(net => net.createServer())
+    await new Promise<void>((resolve, reject) => {
+      testServer.listen(options.port, () => {
+        testServer.close(() => resolve())
+      })
+      testServer.on('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE') {
+          reject(new Error(`Port ${options.port} is already in use`))
+        } else {
+          reject(err)
+        }
+      })
+    })
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+    consola.error(errorMessage)
+    process.exit(1)
+  }
+
   serve({
     fetch: server.fetch as ServerHandler,
     port: options.port,
@@ -164,10 +188,10 @@ export const start = defineCommand({
       description:
         "Generate a command to launch Claude Code with Copilot API config",
     },
-    "show-token": {
+    "bypass-credit": {
       type: "boolean",
       default: false,
-      description: "Show GitHub and Copilot tokens on fetch and refresh",
+      description: "Automatically inject hey/hello messages for credit bypass",
     },
   },
   run({ args }) {
@@ -186,6 +210,7 @@ export const start = defineCommand({
       githubToken: args["github-token"],
       claudeCode: args["claude-code"],
       showToken: args["show-token"],
+      bypassCredit: args["bypass-credit"],
     })
   },
 })
