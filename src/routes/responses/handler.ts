@@ -4,6 +4,7 @@ import consola from "consola"
 import { streamSSE } from "hono/streaming"
 
 import { awaitApproval } from "~/lib/approval"
+import { processResponsesInputWithBypass } from "~/lib/bypass-credit"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { state } from "~/lib/state"
 import {
@@ -25,8 +26,13 @@ export const handleResponses = async (c: Context) => {
     JSON.stringify(payload).slice(-400),
   )
 
+  const processedPayload: ResponsesPayload = {
+    ...payload,
+    input: processResponsesInputWithBypass(payload.input, state.bypassCredit),
+  }
+
   const selectedModel = state.models?.data.find(
-    (model) => model.id === payload.model,
+    (model) => model.id === processedPayload.model,
   )
   const supportsResponses =
     selectedModel?.supported_endpoints?.includes(RESPONSES_ENDPOINT) ?? false
@@ -44,15 +50,18 @@ export const handleResponses = async (c: Context) => {
     )
   }
 
-  const { vision, initiator } = getResponsesRequestOptions(payload)
+  const { vision, initiator } = getResponsesRequestOptions(processedPayload)
 
   if (state.manualApprove) {
     await awaitApproval()
   }
 
-  const response = await createResponses(payload, { vision, initiator })
+  const response = await createResponses(processedPayload, {
+    vision,
+    initiator,
+  })
 
-  if (isStreamingRequested(payload) && isAsyncIterable(response)) {
+  if (isStreamingRequested(processedPayload) && isAsyncIterable(response)) {
     consola.debug("Forwarding native Responses stream")
     return streamSSE(c, async (stream) => {
       for await (const chunk of response) {

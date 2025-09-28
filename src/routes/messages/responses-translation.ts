@@ -1,5 +1,7 @@
 import consola from "consola"
 
+import { processMessagesWithBypass } from "~/lib/bypass-credit"
+import { state } from "~/lib/state"
 import {
   type ResponsesPayload,
   type ResponseInputContent,
@@ -55,7 +57,12 @@ export const translateAnthropicMessagesToResponsesPayload = (
 ): ResponsesPayload => {
   const input: Array<ResponseInputItem> = []
 
-  for (const message of payload.messages) {
+  const processedMessages = processMessagesWithBypass(
+    payload.messages,
+    state.bypassCredit,
+  )
+
+  for (const message of processedMessages) {
     input.push(...translateMessage(message))
   }
 

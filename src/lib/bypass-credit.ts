@@ -1,4 +1,8 @@
 import type { AnthropicMessage } from "~/routes/messages/anthropic-types"
+import type {
+  ResponseInputItem,
+  ResponseInputMessage,
+} from "~/services/copilot/create-responses"
 
 /**
  * Détermine si les messages de bypass credit doivent être injectés
@@ -13,10 +17,7 @@ export function shouldBypassCredit(
   }
 
   // Vérifie si c'est le premier message utilisateur
-  return (
-    messages.length === 1 &&
-    messages[0]?.role === "user"
-  )
+  return messages.length === 1 && messages[0]?.role === "user"
 }
 
 /**
@@ -51,4 +52,71 @@ export function processMessagesWithBypass(
   }
 
   return messages
+}
+
+const isResponseMessageItem = (
+  item: ResponseInputItem,
+): item is ResponseInputMessage =>
+  Boolean(item) && typeof (item as ResponseInputMessage).role === "string"
+
+const shouldBypassResponsesInput = (
+  input: Array<ResponseInputItem>,
+  bypassEnabled: boolean,
+): boolean => {
+  if (!bypassEnabled) {
+    return false
+  }
+
+  const messageItems = input.filter((candidate) =>
+    isResponseMessageItem(candidate),
+  )
+
+  const assistantItems = messageItems.filter(
+    (item) => item.role === "assistant",
+  )
+
+  if (assistantItems.length > 0) {
+    return false
+  }
+
+  const firstMessage = messageItems[0]
+  if (!firstMessage || firstMessage.role !== "user") {
+    return false
+  }
+
+  return true
+}
+
+const injectBypassResponseMessages = (
+  input: Array<ResponseInputItem>,
+): Array<ResponseInputItem> => {
+  const bypassMessages: Array<ResponseInputMessage> = [
+    {
+      type: "message",
+      role: "user",
+      content: "hey",
+    },
+    {
+      type: "message",
+      role: "assistant",
+      content: "hello",
+    },
+  ]
+
+  return [...bypassMessages, ...input]
+}
+
+export const processResponsesInputWithBypass = (
+  input: ResponseInputItem | Array<ResponseInputItem> | string | undefined,
+  bypassEnabled: boolean,
+): ResponseInputItem | Array<ResponseInputItem> | string | undefined => {
+  if (!Array.isArray(input)) {
+    return input
+  }
+
+  if (!shouldBypassResponsesInput(input, bypassEnabled)) {
+    return input
+  }
+
+  return injectBypassResponseMessages(input)
 }
