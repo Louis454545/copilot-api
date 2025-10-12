@@ -6,31 +6,24 @@ export function initProxyFromEnv(): void {
   if (typeof Bun !== "undefined") return
 
   try {
-    const direct = new Agent()
+    const direct = new Agent() as Dispatcher
     const proxies = new Map<string, ProxyAgent>()
 
-    // We only need a minimal dispatcher that implements `dispatch` at runtime.
-    // Typing the object as `Dispatcher` forces TypeScript to require many
-    // additional methods. Instead, keep a plain object and cast when passing
-    // to `setGlobalDispatcher`.
-    const dispatcher = {
+    const dispatcher: Dispatcher = {
       dispatch(
         options: Dispatcher.DispatchOptions,
         handler: Dispatcher.DispatchHandler,
-      ) {
+      ): boolean {
         try {
           const origin =
             typeof options.origin === "string" ?
               new URL(options.origin)
             : (options.origin as URL)
-          const get = getProxyForUrl as unknown as (
-            u: string,
-          ) => string | undefined
-          const raw = get(origin.toString())
+          const raw = getProxyForUrl(origin.toString())
           const proxyUrl = raw && raw.length > 0 ? raw : undefined
           if (!proxyUrl) {
             consola.debug(`HTTP proxy bypass: ${origin.hostname}`)
-            return (direct as unknown as Dispatcher).dispatch(options, handler)
+            return direct.dispatch(options, handler)
           }
           let agent = proxies.get(proxyUrl)
           if (!agent) {
@@ -45,20 +38,20 @@ export function initProxyFromEnv(): void {
             /* noop */
           }
           consola.debug(`HTTP proxy route: ${origin.hostname} via ${label}`)
-          return (agent as unknown as Dispatcher).dispatch(options, handler)
+          return (agent as Dispatcher).dispatch(options, handler)
         } catch {
-          return (direct as unknown as Dispatcher).dispatch(options, handler)
+          return direct.dispatch(options, handler)
         }
       },
-      close() {
+      close(): Promise<void> {
         return direct.close()
       },
-      destroy() {
+      destroy(): Promise<void> {
         return direct.destroy()
       },
     }
 
-    setGlobalDispatcher(dispatcher as unknown as Dispatcher)
+    setGlobalDispatcher(dispatcher)
     consola.debug("HTTP proxy configured from environment (per-URL)")
   } catch (err) {
     consola.debug("Proxy setup skipped:", err)

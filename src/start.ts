@@ -29,6 +29,31 @@ interface RunServerOptions {
   proxyEnv: boolean
 }
 
+async function validatePort(port: number): Promise<void> {
+  try {
+    const testServer = await import("node:net").then((net) =>
+      net.createServer(),
+    )
+    await new Promise<void>((resolve, reject) => {
+      testServer.listen(port, () => {
+        testServer.close(() => resolve())
+      })
+      testServer.on("error", (err: NodeJS.ErrnoException) => {
+        if (err.code === "EADDRINUSE") {
+          reject(new Error(`Port ${port} is already in use`))
+        } else {
+          reject(err)
+        }
+      })
+    })
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred"
+    consola.error(errorMessage)
+    process.exit(1)
+  }
+}
+
 export async function runServer(options: RunServerOptions): Promise<void> {
   if (options.proxyEnv) {
     initProxyFromEnv()
@@ -118,30 +143,7 @@ export async function runServer(options: RunServerOptions): Promise<void> {
     `🌐 Usage Viewer: https://ericc-ch.github.io/copilot-api?endpoint=${serverUrl}/usage`,
   )
 
-  // Check if port is already in use
-  try {
-    // Try to create a temporary server to test the port
-    const testServer = await import("node:net").then((net) =>
-      net.createServer(),
-    )
-    await new Promise<void>((resolve, reject) => {
-      testServer.listen(options.port, () => {
-        testServer.close(() => resolve())
-      })
-      testServer.on("error", (err: NodeJS.ErrnoException) => {
-        if (err.code === "EADDRINUSE") {
-          reject(new Error(`Port ${options.port} is already in use`))
-        } else {
-          reject(err)
-        }
-      })
-    })
-  } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error occurred"
-    consola.error(errorMessage)
-    process.exit(1)
-  }
+  await validatePort(options.port)
 
   serve({
     fetch: server.fetch as ServerHandler,
