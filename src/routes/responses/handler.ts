@@ -6,6 +6,7 @@ import { streamSSE } from "hono/streaming"
 import { awaitApproval } from "~/lib/approval"
 import { processResponsesInputWithBypass } from "~/lib/bypass-credit"
 import { checkRateLimit } from "~/lib/rate-limit"
+import { logRequest } from "~/lib/request-logger"
 import { state } from "~/lib/state"
 import {
   createResponses,
@@ -25,6 +26,15 @@ export const handleResponses = async (c: Context) => {
     "Responses request payload:",
     JSON.stringify(payload).slice(-400),
   )
+
+  if (state.logRequests) {
+    void logRequest({
+      endpoint: c.req.path,
+      method: c.req.method,
+      payload,
+      userAgent: c.req.header("user-agent"),
+    })
+  }
 
   const processedPayload: ResponsesPayload = {
     ...payload,

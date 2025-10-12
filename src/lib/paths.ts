@@ -3,16 +3,19 @@ import os from "node:os"
 import path from "node:path"
 
 const APP_DIR = path.join(os.homedir(), ".local", "share", "copilot-api")
+const LOGS_DIR = path.join(process.cwd(), "logs")
 
 const GITHUB_TOKEN_PATH = path.join(APP_DIR, "github_token")
 
 export const PATHS = {
   APP_DIR,
+  LOGS_DIR,
   GITHUB_TOKEN_PATH,
 }
 
 export async function ensurePaths(): Promise<void> {
   await fs.mkdir(PATHS.APP_DIR, { recursive: true })
+  await fs.mkdir(PATHS.LOGS_DIR, { recursive: true })
   await ensureFile(PATHS.GITHUB_TOKEN_PATH)
 }
 

@@ -5,6 +5,7 @@ import { streamSSE, type SSEMessage } from "hono/streaming"
 
 import { awaitApproval } from "~/lib/approval"
 import { checkRateLimit } from "~/lib/rate-limit"
+import { logRequest } from "~/lib/request-logger"
 import { state } from "~/lib/state"
 import { getTokenCount } from "~/lib/tokenizer"
 import { isNullish } from "~/lib/utils"
@@ -19,6 +20,15 @@ export async function handleCompletion(c: Context) {
 
   let payload = await c.req.json<ChatCompletionsPayload>()
   consola.debug("Request payload:", JSON.stringify(payload).slice(-400))
+
+  if (state.logRequests) {
+    void logRequest({
+      endpoint: c.req.path,
+      method: c.req.method,
+      payload,
+      userAgent: c.req.header("user-agent"),
+    })
+  }
 
   consola.info("Current token count:", getTokenCount(payload.messages))
 

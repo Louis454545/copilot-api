@@ -1,3 +1,5 @@
+import { processMessagesWithBypass } from "~/lib/bypass-credit"
+import { state } from "~/lib/state"
 import {
   type ChatCompletionResponse,
   type ChatCompletionsPayload,
@@ -7,8 +9,6 @@ import {
   type Tool,
   type ToolCall,
 } from "~/services/copilot/create-chat-completions"
-import { processMessagesWithBypass } from "~/lib/bypass-credit"
-import { state } from "~/lib/state"
 
 import {
   type AnthropicAssistantContentBlock,
@@ -63,7 +63,10 @@ function translateAnthropicMessagesToOpenAI(
   system: string | Array<AnthropicTextBlock> | undefined,
 ): Array<Message> {
   // Appliquer la logique bypass credit si activée
-  const processedMessages = processMessagesWithBypass(anthropicMessages, state.bypassCredit)
+  const processedMessages = processMessagesWithBypass(
+    anthropicMessages,
+    state.bypassCredit,
+  )
 
   const systemMessages = handleSystemPrompt(system)
 

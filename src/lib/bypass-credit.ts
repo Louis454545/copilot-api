@@ -79,12 +79,7 @@ const shouldBypassResponsesInput = (
     return false
   }
 
-  const firstMessage = messageItems[0]
-  if (!firstMessage || firstMessage.role !== "user") {
-    return false
-  }
-
-  return true
+  return messageItems.length > 0 && messageItems[0].role === "user"
 }
 
 const injectBypassResponseMessages = (

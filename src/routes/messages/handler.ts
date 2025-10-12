@@ -5,6 +5,7 @@ import { streamSSE } from "hono/streaming"
 
 import { awaitApproval } from "~/lib/approval"
 import { checkRateLimit } from "~/lib/rate-limit"
+import { logRequest } from "~/lib/request-logger"
 import { state } from "~/lib/state"
 import {
   createResponsesStreamState,
@@ -40,6 +41,15 @@ export async function handleCompletion(c: Context) {
 
   const anthropicPayload = await c.req.json<AnthropicMessagesPayload>()
   consola.debug("Anthropic request payload:", JSON.stringify(anthropicPayload))
+
+  if (state.logRequests) {
+    void logRequest({
+      endpoint: c.req.path,
+      method: c.req.method,
+      payload: anthropicPayload,
+      userAgent: c.req.header("user-agent"),
+    })
+  }
 
   const useResponsesApi = shouldUseResponsesApi(anthropicPayload.model)
 

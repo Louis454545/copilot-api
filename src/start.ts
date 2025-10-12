@@ -24,6 +24,7 @@ interface RunServerOptions {
   claudeCode: boolean
   showToken: boolean
   bypassCredit: boolean
+  logRequests: boolean
 }
 
 export async function runServer(options: RunServerOptions): Promise<void> {
@@ -42,6 +43,7 @@ export async function runServer(options: RunServerOptions): Promise<void> {
   state.rateLimitWait = options.rateLimitWait
   state.showToken = options.showToken
   state.bypassCredit = options.bypassCredit
+  state.logRequests = options.logRequests
 
   await ensurePaths()
   await cacheVSCodeVersion()
@@ -109,13 +111,15 @@ export async function runServer(options: RunServerOptions): Promise<void> {
   // Check if port is already in use
   try {
     // Try to create a temporary server to test the port
-    const testServer = await import("node:net").then(net => net.createServer())
+    const testServer = await import("node:net").then((net) =>
+      net.createServer(),
+    )
     await new Promise<void>((resolve, reject) => {
       testServer.listen(options.port, () => {
         testServer.close(() => resolve())
       })
-      testServer.on('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'EADDRINUSE') {
+      testServer.on("error", (err: NodeJS.ErrnoException) => {
+        if (err.code === "EADDRINUSE") {
           reject(new Error(`Port ${options.port} is already in use`))
         } else {
           reject(err)
@@ -123,7 +127,8 @@ export async function runServer(options: RunServerOptions): Promise<void> {
       })
     })
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred"
     consola.error(errorMessage)
     process.exit(1)
   }
@@ -188,10 +193,21 @@ export const start = defineCommand({
       description:
         "Generate a command to launch Claude Code with Copilot API config",
     },
+    "show-token": {
+      type: "boolean",
+      default: false,
+      description: "Show GitHub token on auth",
+    },
     "bypass-credit": {
       type: "boolean",
       default: false,
       description: "Automatically inject hey/hello messages for credit bypass",
+    },
+    "log-requests": {
+      alias: "l",
+      type: "boolean",
+      default: false,
+      description: "Log all incoming requests to JSON files",
     },
   },
   run({ args }) {
@@ -211,6 +227,7 @@ export const start = defineCommand({
       claudeCode: args["claude-code"],
       showToken: args["show-token"],
       bypassCredit: args["bypass-credit"],
+      logRequests: args["log-requests"],
     })
   },
 })
