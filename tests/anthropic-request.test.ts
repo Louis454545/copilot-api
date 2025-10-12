@@ -15,7 +15,7 @@ const messageSchema = z.object({
     "function",
     "developer",
   ]),
-  content: z.union([z.string(), z.object({}), z.array(z.any())]),
+  content: z.union([z.string(), z.object({}), z.array(z.any()), z.null()]),
   name: z.string().optional(),
   tool_calls: z.array(z.any()).optional(),
   tool_call_id: z.string().optional(),
@@ -309,5 +309,229 @@ describe("OpenAI Chat Completion v1 Request Payload Validation with Zod", () => 
     expect(isValidChatCompletionRequest(undefined)).toBe(false)
     expect(isValidChatCompletionRequest("a string")).toBe(false)
     expect(isValidChatCompletionRequest(123)).toBe(false)
+  })
+})
+
+describe("Tool results with images", () => {
+  test("should handle tool result with string content", () => {
+    const anthropicPayload: AnthropicMessagesPayload = {
+      model: "gpt-4o",
+      messages: [
+        { role: "user", content: "Get me an image" },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "tool_123",
+              name: "get_image",
+              input: { query: "cat" },
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "tool_123",
+              content: "Here is the image result",
+            },
+          ],
+        },
+      ],
+      max_tokens: 100,
+    }
+
+    const openAIPayload = translateToOpenAI(anthropicPayload)
+    expect(isValidChatCompletionRequest(openAIPayload)).toBe(true)
+
+    const toolMessage = openAIPayload.messages.find((m) => m.role === "tool")
+    expect(toolMessage).toBeDefined()
+    expect(toolMessage?.content).toBe("Here is the image result")
+  })
+
+  test("should handle tool result with text and image content", () => {
+    const anthropicPayload: AnthropicMessagesPayload = {
+      model: "gpt-4o",
+      messages: [
+        { role: "user", content: "Get me an image" },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "tool_123",
+              name: "get_image",
+              input: { query: "cat" },
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "tool_123",
+              content: [
+                { type: "text", text: "Here is the image:" },
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: "image/png",
+                    data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      max_tokens: 100,
+    }
+
+    const openAIPayload = translateToOpenAI(anthropicPayload)
+    expect(isValidChatCompletionRequest(openAIPayload)).toBe(true)
+
+    // Tool message should have both text and image in content array
+    const toolMessage = openAIPayload.messages.find((m) => m.role === "tool")
+    expect(toolMessage).toBeDefined()
+    expect(Array.isArray(toolMessage?.content)).toBe(true)
+
+    const content = toolMessage?.content as Array<{
+      type: string
+      text?: string
+      image_url?: { url: string }
+    }>
+    expect(content.length).toBe(2)
+    expect(content[0].type).toBe("text")
+    expect(content[0].text).toBe("Here is the image:")
+    expect(content[1].type).toBe("image_url")
+    expect(content[1].image_url?.url).toContain("data:image/png;base64,")
+  })
+
+  test("should handle tool result with only image content", () => {
+    const anthropicPayload: AnthropicMessagesPayload = {
+      model: "gpt-4o",
+      messages: [
+        { role: "user", content: "Get me an image" },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "tool_123",
+              name: "get_image",
+              input: { query: "cat" },
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "tool_123",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: "image/jpeg",
+                    data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      max_tokens: 100,
+    }
+
+    const openAIPayload = translateToOpenAI(anthropicPayload)
+    expect(isValidChatCompletionRequest(openAIPayload)).toBe(true)
+
+    // Tool message should have only image in content array
+    const toolMessage = openAIPayload.messages.find((m) => m.role === "tool")
+    expect(toolMessage).toBeDefined()
+    expect(Array.isArray(toolMessage?.content)).toBe(true)
+
+    const content = toolMessage?.content as Array<{
+      type: string
+      image_url?: { url: string }
+    }>
+    expect(content.length).toBe(1)
+    expect(content[0].type).toBe("image_url")
+    expect(content[0].image_url?.url).toContain("data:image/jpeg;base64,")
+  })
+
+  test("should handle tool result with multiple images", () => {
+    const anthropicPayload: AnthropicMessagesPayload = {
+      model: "gpt-4o",
+      messages: [
+        { role: "user", content: "Get me two images" },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "tool_123",
+              name: "get_images",
+              input: { count: 2 },
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "tool_123",
+              content: [
+                { type: "text", text: "Found 2 images:" },
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: "image/png",
+                    data: "imagedata1",
+                  },
+                },
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: "image/png",
+                    data: "imagedata2",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      max_tokens: 100,
+    }
+
+    const openAIPayload = translateToOpenAI(anthropicPayload)
+    expect(isValidChatCompletionRequest(openAIPayload)).toBe(true)
+
+    // Tool message should have text and both images in content array
+    const toolMessage = openAIPayload.messages.find((m) => m.role === "tool")
+    expect(toolMessage).toBeDefined()
+    expect(Array.isArray(toolMessage?.content)).toBe(true)
+
+    const content = toolMessage?.content as Array<{
+      type: string
+      text?: string
+      image_url?: { url: string }
+    }>
+    expect(content.length).toBe(3)
+    expect(content[0].type).toBe("text")
+    expect(content[0].text).toBe("Found 2 images:")
+    expect(content[1].type).toBe("image_url")
+    expect(content[2].type).toBe("image_url")
   })
 })

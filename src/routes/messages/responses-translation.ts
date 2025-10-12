@@ -125,6 +125,9 @@ const translateUserMessage = (
     if (block.type === "tool_result") {
       flushPendingContent("user", pendingContent, items)
       items.push(createFunctionCallOutput(block))
+
+      // If tool_result has images, add them to pending content for next message
+      collectImagesFromToolResult(block, pendingContent)
       continue
     }
 
@@ -260,12 +263,43 @@ const createFunctionToolCall = (
 
 const createFunctionCallOutput = (
   block: AnthropicToolResultBlock,
-): FunctionCallOutputItem => ({
-  type: "function_call_output",
-  call_id: block.tool_use_id,
-  output: block.content,
-  status: block.is_error ? "incomplete" : "completed",
-})
+): FunctionCallOutputItem => {
+  const textContent = extractTextFromToolResult(block.content)
+  return {
+    type: "function_call_output",
+    call_id: block.tool_use_id,
+    output: textContent,
+    status: block.is_error ? "incomplete" : "completed",
+  }
+}
+
+const extractTextFromToolResult = (
+  content: string | Array<AnthropicUserContentBlock>,
+): string => {
+  if (typeof content === "string") {
+    return content
+  }
+
+  return content
+    .filter((block): block is AnthropicTextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("\n\n")
+}
+
+const collectImagesFromToolResult = (
+  block: AnthropicToolResultBlock,
+  pendingContent: Array<ResponseInputContent>,
+): void => {
+  if (!Array.isArray(block.content)) {
+    return
+  }
+
+  for (const contentBlock of block.content) {
+    if (contentBlock.type === "image") {
+      pendingContent.push(createImageContent(contentBlock))
+    }
+  }
+}
 
 const translateSystemPrompt = (
   system: string | Array<AnthropicTextBlock> | undefined,
