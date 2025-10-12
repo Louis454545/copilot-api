@@ -7,6 +7,7 @@ import { serve, type ServerHandler } from "srvx"
 import invariant from "tiny-invariant"
 
 import { ensurePaths } from "./lib/paths"
+import { initProxyFromEnv } from "./lib/proxy"
 import { generateEnvScript } from "./lib/shell"
 import { state } from "./lib/state"
 import { setupCopilotToken, setupGitHubToken } from "./lib/token"
@@ -25,9 +26,14 @@ interface RunServerOptions {
   showToken: boolean
   bypassCredit: boolean
   logRequests: boolean
+  proxyEnv: boolean
 }
 
 export async function runServer(options: RunServerOptions): Promise<void> {
+  if (options.proxyEnv) {
+    initProxyFromEnv()
+  }
+
   if (options.verbose) {
     consola.level = 5
     consola.info("Verbose logging enabled")
@@ -88,7 +94,11 @@ export async function runServer(options: RunServerOptions): Promise<void> {
         ANTHROPIC_BASE_URL: serverUrl,
         ANTHROPIC_AUTH_TOKEN: "dummy",
         ANTHROPIC_MODEL: selectedModel,
+        ANTHROPIC_DEFAULT_SONNET_MODEL: selectedModel,
         ANTHROPIC_SMALL_FAST_MODEL: selectedSmallModel,
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: selectedSmallModel,
+        DISABLE_NON_ESSENTIAL_MODEL_CALLS: "1",
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
       },
       "claude",
     )
@@ -209,6 +219,11 @@ export const start = defineCommand({
       default: false,
       description: "Log all incoming requests to JSON files",
     },
+    "proxy-env": {
+      type: "boolean",
+      default: false,
+      description: "Initialize proxy from environment variables",
+    },
   },
   run({ args }) {
     const rateLimitRaw = args["rate-limit"]
@@ -228,6 +243,7 @@ export const start = defineCommand({
       showToken: args["show-token"],
       bypassCredit: args["bypass-credit"],
       logRequests: args["log-requests"],
+      proxyEnv: args["proxy-env"],
     })
   },
 })
