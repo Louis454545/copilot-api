@@ -8,6 +8,7 @@ import { processResponsesInputWithBypass } from "~/lib/bypass-credit"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { logRequest } from "~/lib/request-logger"
 import { state } from "~/lib/state"
+import { startStreamPing } from "~/lib/utils"
 import {
   createResponses,
   type ResponsesPayload,
@@ -74,13 +75,23 @@ export const handleResponses = async (c: Context) => {
   if (isStreamingRequested(processedPayload) && isAsyncIterable(response)) {
     consola.debug("Forwarding native Responses stream")
     return streamSSE(c, async (stream) => {
-      for await (const chunk of response) {
-        consola.debug("Responses stream chunk:", JSON.stringify(chunk))
-        await stream.writeSSE({
-          id: (chunk as { id?: string }).id,
-          event: (chunk as { event?: string }).event,
-          data: (chunk as { data?: string }).data ?? "",
-        })
+      const pingInterval = startStreamPing(stream)
+
+      try {
+        for await (const chunk of response) {
+          consola.debug("Responses stream chunk:", JSON.stringify(chunk))
+          await stream.writeSSE({
+            id: (chunk as { id?: string }).id,
+            event: (chunk as { event?: string }).event,
+            data: (chunk as { data?: string }).data ?? "",
+          })
+        }
+      } catch (error) {
+        consola.error("Error in Responses stream:", error)
+        throw error
+      } finally {
+        clearInterval(pingInterval)
+        consola.debug("Responses stream completed, ping stopped")
       }
     })
   }

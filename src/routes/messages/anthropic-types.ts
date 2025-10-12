@@ -56,6 +56,7 @@ export interface AnthropicToolUseBlock {
 export interface AnthropicThinkingBlock {
   type: "thinking"
   thinking: string
+  signature?: string | null
 }
 
 export type AnthropicUserContentBlock =
@@ -133,7 +134,7 @@ export interface AnthropicContentBlockStartEvent {
     | (Omit<AnthropicToolUseBlock, "input"> & {
         input: Record<string, unknown>
       })
-    | { type: "thinking"; thinking: string }
+    | { type: "thinking"; thinking: string; signature?: string | null }
 }
 
 export interface AnthropicContentBlockDeltaEvent {

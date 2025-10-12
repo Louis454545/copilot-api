@@ -7,6 +7,7 @@ import { awaitApproval } from "~/lib/approval"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { logRequest } from "~/lib/request-logger"
 import { state } from "~/lib/state"
+import { startStreamPing } from "~/lib/utils"
 import {
   createResponsesStreamState,
   translateResponsesStreamEvent,
@@ -93,6 +94,7 @@ const handleWithChatCompletions = async (
 
   consola.debug("Streaming response from Copilot")
   return streamSSE(c, async (stream) => {
+    const pingInterval = startStreamPing(stream)
     const streamState: AnthropicStreamState = {
       messageStartSent: false,
       contentBlockIndex: 0,
@@ -100,26 +102,34 @@ const handleWithChatCompletions = async (
       toolCalls: {},
     }
 
-    for await (const rawEvent of response) {
-      consola.debug("Copilot raw stream event:", JSON.stringify(rawEvent))
-      if (rawEvent.data === "[DONE]") {
-        break
-      }
+    try {
+      for await (const rawEvent of response) {
+        consola.debug("Copilot raw stream event:", JSON.stringify(rawEvent))
+        if (rawEvent.data === "[DONE]") {
+          break
+        }
 
-      if (!rawEvent.data) {
-        continue
-      }
+        if (!rawEvent.data) {
+          continue
+        }
 
-      const chunk = JSON.parse(rawEvent.data) as ChatCompletionChunk
-      const events = translateChunkToAnthropicEvents(chunk, streamState)
+        const chunk = JSON.parse(rawEvent.data) as ChatCompletionChunk
+        const events = translateChunkToAnthropicEvents(chunk, streamState)
 
-      for (const event of events) {
-        consola.debug("Translated Anthropic event:", JSON.stringify(event))
-        await stream.writeSSE({
-          event: event.type,
-          data: JSON.stringify(event),
-        })
+        for (const event of events) {
+          consola.debug("Translated Anthropic event:", JSON.stringify(event))
+          await stream.writeSSE({
+            event: event.type,
+            data: JSON.stringify(event),
+          })
+        }
       }
+    } catch (error) {
+      consola.error("Error in chat completions stream:", error)
+      throw error
+    } finally {
+      clearInterval(pingInterval)
+      consola.debug("Chat completions stream completed, ping stopped")
     }
   })
 }
@@ -144,50 +154,59 @@ const handleWithResponsesApi = async (
   if (responsesPayload.stream && isAsyncIterable(response)) {
     consola.debug("Streaming response from Copilot (Responses API)")
     return streamSSE(c, async (stream) => {
+      const pingInterval = startStreamPing(stream)
       const streamState = createResponsesStreamState()
 
-      for await (const chunk of response) {
-        consola.debug("Responses raw stream event:", JSON.stringify(chunk))
+      try {
+        for await (const chunk of response) {
+          consola.debug("Responses raw stream event:", JSON.stringify(chunk))
 
-        const eventName = (chunk as { event?: string }).event
-        if (eventName === "ping") {
-          await stream.writeSSE({ event: "ping", data: "" })
-          continue
+          const eventName = (chunk as { event?: string }).event
+          if (eventName === "ping") {
+            await stream.writeSSE({ event: "ping", data: "" })
+            continue
+          }
+
+          const data = (chunk as { data?: string }).data
+          if (!data) {
+            continue
+          }
+
+          if (data === "[DONE]") {
+            break
+          }
+
+          const parsed = safeJsonParse(data)
+          if (!parsed) {
+            continue
+          }
+
+          const events = translateResponsesStreamEvent(parsed, streamState)
+          for (const event of events) {
+            consola.debug("Translated Anthropic event:", JSON.stringify(event))
+            await stream.writeSSE({
+              event: event.type,
+              data: JSON.stringify(event),
+            })
+          }
         }
 
-        const data = (chunk as { data?: string }).data
-        if (!data) {
-          continue
-        }
-
-        if (data === "[DONE]") {
-          break
-        }
-
-        const parsed = safeJsonParse(data)
-        if (!parsed) {
-          continue
-        }
-
-        const events = translateResponsesStreamEvent(parsed, streamState)
-        for (const event of events) {
-          consola.debug("Translated Anthropic event:", JSON.stringify(event))
+        if (!streamState.messageCompleted) {
+          consola.warn(
+            "Responses stream ended without completion; sending fallback message_stop",
+          )
+          const fallback = { type: "message_stop" as const }
           await stream.writeSSE({
-            event: event.type,
-            data: JSON.stringify(event),
+            event: fallback.type,
+            data: JSON.stringify(fallback),
           })
         }
-      }
-
-      if (!streamState.messageCompleted) {
-        consola.warn(
-          "Responses stream ended without completion; sending fallback message_stop",
-        )
-        const fallback = { type: "message_stop" as const }
-        await stream.writeSSE({
-          event: fallback.type,
-          data: JSON.stringify(fallback),
-        })
+      } catch (error) {
+        consola.error("Error in Responses API stream:", error)
+        throw error
+      } finally {
+        clearInterval(pingInterval)
+        consola.debug("Responses API stream completed, ping stopped")
       }
     })
   }
