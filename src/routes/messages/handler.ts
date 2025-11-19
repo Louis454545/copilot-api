@@ -100,6 +100,7 @@ const handleWithChatCompletions = async (
       contentBlockIndex: 0,
       contentBlockOpen: false,
       toolCalls: {},
+      thinkingBlockOpen: false,
     }
 
     try {
