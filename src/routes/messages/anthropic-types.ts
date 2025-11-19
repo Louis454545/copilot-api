@@ -56,7 +56,7 @@ export interface AnthropicToolUseBlock {
 export interface AnthropicThinkingBlock {
   type: "thinking"
   thinking: string
-  signature?: string | null
+  signature: string
 }
 
 export type AnthropicUserContentBlock =
