@@ -134,11 +134,17 @@ function handleUserMessage(message: AnthropicUserMessage): Array<Message> {
 function handleAssistantMessage(
   message: AnthropicAssistantMessage,
 ): Array<Message> {
+  const rawContent = mapContent(message.content)
+  const content =
+    typeof rawContent === "string" && rawContent.length === 0 ?
+      null
+    : rawContent
+
   if (!Array.isArray(message.content)) {
     return [
       {
         role: "assistant",
-        content: mapContent(message.content),
+        content,
       },
     ]
   }
@@ -164,7 +170,7 @@ function handleAssistantMessage(
       [
         {
           role: "assistant",
-          content: mapContent(message.content),
+          content,
           reasoning_text: allThinkingContent,
           reasoning_opaque: signature,
           tool_calls: toolUseBlocks.map((toolUse) => ({
@@ -180,7 +186,7 @@ function handleAssistantMessage(
     : [
         {
           role: "assistant",
-          content: mapContent(message.content),
+          content,
           reasoning_text: allThinkingContent,
           reasoning_opaque: signature,
         },
