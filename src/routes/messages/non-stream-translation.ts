@@ -135,16 +135,15 @@ function handleAssistantMessage(
   message: AnthropicAssistantMessage,
 ): Array<Message> {
   const rawContent = mapContent(message.content)
-  const content =
-    typeof rawContent === "string" && rawContent.length === 0 ?
-      null
-    : rawContent
 
   if (!Array.isArray(message.content)) {
+    // If no content (empty string) and no tools, we must ensure content is at least ""
+    // mapContent returns "" for empty string input, so we just use it.
+    // However, if mapContent returned null/undefined for some reason, we'd fallback to ""
     return [
       {
         role: "assistant",
-        content,
+        content: rawContent || "",
       },
     ]
   }
@@ -152,6 +151,19 @@ function handleAssistantMessage(
   const toolUseBlocks = message.content.filter(
     (block): block is AnthropicToolUseBlock => block.type === "tool_use",
   )
+
+  // Determine content:
+  // If we have tools, we can have null content if string is empty.
+  // If we don't have tools, content MUST be a string (at least "").
+  let content = rawContent
+  if (toolUseBlocks.length > 0) {
+    if (typeof content === "string" && content.length === 0) {
+      content = null
+    }
+  } else if (!content) {
+    // No tools, ensure content is not null/undefined
+    content = ""
+  }
 
   const thinkingBlocks = message.content.filter(
     (block): block is AnthropicThinkingBlock => block.type === "thinking",

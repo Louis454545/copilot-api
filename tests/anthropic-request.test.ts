@@ -199,6 +199,29 @@ describe("Anthropic to OpenAI translation logic", () => {
     expect(assistantMessage?.tool_calls).toHaveLength(1)
     expect(assistantMessage?.tool_calls?.[0].function.name).toBe("get_weather")
   })
+
+  test("should handle assistant message with empty content (no tool calls)", () => {
+    const anthropicPayload: AnthropicMessagesPayload = {
+      model: "gemini-3-pro-preview",
+      messages: [
+        { role: "user", content: "Hello" },
+        { role: "assistant", content: [] }, // Empty content
+      ],
+      max_tokens: 1024,
+    }
+
+    const openAIPayload = translateToOpenAI(anthropicPayload)
+    const assistantMessage = openAIPayload.messages.find(
+      (m) => m.role === "assistant",
+    )
+
+    expect(assistantMessage).toBeDefined()
+
+    if (!assistantMessage?.tool_calls) {
+      expect(assistantMessage?.content).not.toBeNull()
+      expect(assistantMessage?.content).toBe("")
+    }
+  })
 })
 
 describe("OpenAI Chat Completion v1 Request Payload Validation with Zod", () => {
