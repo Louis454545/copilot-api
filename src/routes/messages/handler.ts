@@ -3,6 +3,8 @@ import type { Context } from "hono"
 import consola from "consola"
 import { streamSSE } from "hono/streaming"
 
+import type { HonoEnv } from "~/types"
+
 import { awaitApproval } from "~/lib/approval"
 import { checkRateLimit } from "~/lib/rate-limit"
 import { logRequest } from "~/lib/request-logger"
@@ -37,10 +39,11 @@ import {
 } from "./non-stream-translation"
 import { translateChunkToAnthropicEvents } from "./stream-translation"
 
-export async function handleCompletion(c: Context) {
+export async function handleCompletion(c: Context<HonoEnv>) {
   await checkRateLimit(state)
 
   const anthropicPayload = await c.req.json<AnthropicMessagesPayload>()
+  c.set("requestModel", anthropicPayload.model)
   consola.debug("Anthropic request payload:", JSON.stringify(anthropicPayload))
 
   if (state.logRequests) {

@@ -1,6 +1,8 @@
 import { Hono } from "hono"
 import { cors } from "hono/cors"
-import { logger } from "hono/logger"
+
+import { logger } from "~/lib/logger-middleware"
+import { type HonoEnv } from "~/types"
 
 import { completionRoutes } from "./routes/chat-completions/route"
 import { embeddingRoutes } from "./routes/embeddings/route"
@@ -10,7 +12,7 @@ import { responsesRoutes } from "./routes/responses/route"
 import { tokenRoute } from "./routes/token/route"
 import { usageRoute } from "./routes/usage/route"
 
-export const server = new Hono()
+export const server = new Hono<HonoEnv>()
 
 server.use(logger())
 server.use(cors())

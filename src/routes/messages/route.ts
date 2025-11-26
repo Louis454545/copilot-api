@@ -1,11 +1,12 @@
 import { Hono } from "hono"
 
 import { forwardError } from "~/lib/error"
+import { type HonoEnv } from "~/types"
 
 import { handleCountTokens } from "./count-tokens-handler"
 import { handleCompletion } from "./handler"
 
-export const messageRoutes = new Hono()
+export const messageRoutes = new Hono<HonoEnv>()
 
 messageRoutes.post("/", async (c) => {
   try {

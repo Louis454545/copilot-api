@@ -14,11 +14,13 @@ import {
   type ChatCompletionResponse,
   type ChatCompletionsPayload,
 } from "~/services/copilot/create-chat-completions"
+import { type HonoEnv } from "~/types"
 
-export async function handleCompletion(c: Context) {
+export async function handleCompletion(c: Context<HonoEnv>) {
   await checkRateLimit(state)
 
   let payload = await c.req.json<ChatCompletionsPayload>()
+  c.set("requestModel", payload.model)
   consola.debug("Request payload:", JSON.stringify(payload).slice(-400))
 
   if (state.logRequests) {
