@@ -178,13 +178,17 @@ function handleAssistantMessage(
     (b) => b.signature && b.signature.length > 0,
   )?.signature
 
+  const reasoningText =
+    allThinkingContent.length > 0 ? allThinkingContent : null
+  const reasoningOpaque = reasoningText ? signature : null
+
   return toolUseBlocks.length > 0 ?
       [
         {
           role: "assistant",
           content,
-          reasoning_text: allThinkingContent,
-          reasoning_opaque: signature,
+          reasoning_text: reasoningText,
+          reasoning_opaque: reasoningOpaque,
           tool_calls: toolUseBlocks.map((toolUse) => ({
             id: toolUse.id,
             type: "function",
@@ -199,8 +203,8 @@ function handleAssistantMessage(
         {
           role: "assistant",
           content,
-          reasoning_text: allThinkingContent,
-          reasoning_opaque: signature,
+          reasoning_text: reasoningText,
+          reasoning_opaque: reasoningOpaque,
         },
       ]
 }
